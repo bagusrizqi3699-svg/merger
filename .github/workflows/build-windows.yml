@@ -1,0 +1,40 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Download FFmpeg
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "$env:RUNNER_TEMP\ffmpeg.zip"
+          Expand-Archive "$env:RUNNER_TEMP\ffmpeg.zip" "$env:RUNNER_TEMP\ffmpeg" -Force
+          $f = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          "FFMPEG_BIN=$($f.Directory.FullName)" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Build application
+        run: pyinstaller --noconfirm --clean --windowed --onedir --name VideoMerger VIDEO_MERGER.py
+
+      - name: Bundle FFmpeg
+        shell: pwsh
+        run: Copy-Item "$env:FFMPEG_BIN\*" "dist\VideoMerger\" -Recurse -Force
+
+      - name: Upload application
+        uses: actions/upload-artifact@v4
+        with:
+          name: VideoMerger-Windows-Portable
+          path: dist/VideoMerger/
